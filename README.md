@@ -11,7 +11,7 @@
 - mark todo item as done
 - mark todo item as not done
 - mark todo item as in progress
-
+- edit/replace a todo item
 
 ## How it is gonna work?
 

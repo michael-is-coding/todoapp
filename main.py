@@ -1,11 +1,13 @@
 import os
 import sys
+from math import ceil
 
 FILE_NAME = 'todos.txt'
 
 PREFIX_DONE = '::done::'
 PREFIX_RM = '::rm::'
 
+# todo: This should really be an enum
 ACTION_UNDONE = 'undone'
 ACTION_DONE = 'done'
 ACTION_NEW = 'new'
@@ -13,9 +15,11 @@ ACTION_LIST = 'ls'
 ACTION_EXIT = 'exit'
 ACTION_HELP = 'help'
 ACTION_RM = 'rm'
+ACTION_NEXT = 'next'
+ACTION_PREV = 'prev'
 
 ALL_ACTIONS = [ACTION_LIST, ACTION_NEW, ACTION_EXIT, ACTION_DONE, ACTION_UNDONE,
-               ACTION_HELP, ACTION_RM]
+               ACTION_HELP, ACTION_RM, ACTION_NEXT, ACTION_PREV]
 
 ITEM_ACTIONS = [ACTION_DONE, ACTION_UNDONE, ACTION_RM]
 
@@ -74,10 +78,29 @@ def is_done(item):
     return item.startswith(PREFIX_DONE)
 
 
-def list_todos(todo_list):
-    count = 0
+def list_todos(todo_list, page):
+    # how many items per page
+    page_len = 5
+    pages_count = ceil(len(todo_list) / page_len)
+
+    if page > pages_count:
+        print('There are no more pages.')
+        return
+    elif page < 1:
+        print("You're on the first page already.")
+        return
+
+    start_index = (page - 1) * page_len
+    end_index = page * page_len
+
+    count = start_index
     printed_count = 0
-    for item in todo_list:
+
+    # todo: we slice by page_len but if there are removed items
+    #  in the slice we will print less than page_len
+    for item in todo_list[start_index:end_index]:
+        if printed_count >= 5:
+            break
         count += 1
         title = item
         if is_rm(item):
@@ -89,8 +112,13 @@ def list_todos(todo_list):
         printed_count += 1
 
     if printed_count:
-        print('\nTo mark item done, type "done" and number of item\n'
-              'To undone item type "undone" and number of item\n')
+        print(f'\nPage {page} of {pages_count}')
+        if page == pages_count:
+            print('This is the last page. Type "prev" to go to the previous page.')
+        elif page == 1:
+            print('Type "next" to go to the next page.')
+        else:
+            print('Type "next" to go to the next page. Type "prev" to go to the previous page.')
     else:
         print('No todos. Let\'s add some. Type "new".')
 
@@ -131,14 +159,33 @@ def show_help():
           '"undone" and number of the item to mark item as not done\n')
 
 
-def process_user_input(user_input, todos):
+def process_user_input(user_input, todos, context):
     action, item_index = parse_action_and_item_index(user_input, todos)
 
     if not action:
         print('Not a valid action')
 
+    # todo: we edit context, we should rathere make copy and return new context
     if action == ACTION_LIST:
-        list_todos(todos)
+        list_todos(todos, page=1)
+        context['page'] = 1
+    elif action == ACTION_NEXT:
+        # todo: next 7 lines are same as for PREV except +/-
+        page = context.get('page')
+        if page:
+            page = page + 1
+            list_todos(todos, page=page)
+            context['page'] = page
+        else:
+            print('There is no previous page use "ls" to list from beginning.')
+    elif action == ACTION_PREV:
+        page = context.get('page')
+        if page:
+            page = page - 1
+            list_todos(todos, page=page)
+            context['page'] = page
+        else:
+            print('There is no previous page use "ls" to list from beginning.')
     elif action == ACTION_NEW:
         new_todo(todos)
     elif action == ACTION_EXIT:
@@ -191,10 +238,14 @@ def run():
     print('Welcome to our ToDo app.')
     show_help()
     todos = load_todos()
-
+    # todo: context should not be dict, we'll make it a frozen datalass
+    context = dict()
     while 1:
         user_input = input()
-        process_user_input(user_input, todos)
+        # todo: again, context is passed around and it isupdated
+        # we should give function context and it should return
+        # updated context
+        process_user_input(user_input, todos, context)
         print('Waiting for your next action. Type "help" to see available commands.\n')
 
 
