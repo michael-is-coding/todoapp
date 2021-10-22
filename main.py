@@ -1,6 +1,11 @@
 import os
+import readline
 import sys
+from dataclasses import dataclass
+from enum import Enum, unique, auto
 from math import ceil
+
+PAGE_LEN = 5
 
 FILE_NAME = 'todos.txt'
 
@@ -22,6 +27,19 @@ ALL_ACTIONS = [ACTION_LIST, ACTION_NEW, ACTION_EXIT, ACTION_DONE, ACTION_UNDONE,
                ACTION_HELP, ACTION_RM, ACTION_NEXT, ACTION_PREV]
 
 ITEM_ACTIONS = [ACTION_DONE, ACTION_UNDONE, ACTION_RM]
+
+
+@unique
+class ListAction(Enum):
+    START = auto()
+    NEXT = auto()
+    PREV = auto()
+
+
+# todo: We want to  make it a frozen datalass
+@dataclass
+class Context:
+    page = 0
 
 
 def load_todos():
@@ -78,18 +96,7 @@ def is_done(item):
     return item.startswith(PREFIX_DONE)
 
 
-def list_todos(todo_list, page):
-    # how many items per page
-    page_len = 5
-    pages_count = ceil(len(todo_list) / page_len)
-
-    if page > pages_count:
-        print('There are no more pages.')
-        return
-    elif page < 1:
-        print("You're on the first page already.")
-        return
-
+def display_todos(todo_list, page, page_len, pages_count):
     start_index = (page - 1) * page_len
     end_index = page * page_len
 
@@ -97,7 +104,7 @@ def list_todos(todo_list, page):
     printed_count = 0
 
     # todo: we slice by page_len but if there are removed items
-    #  in the slice we will print less than page_len
+    # in the slice we will print less than page_len
     for item in todo_list[start_index:end_index]:
         if printed_count >= 5:
             break
@@ -159,33 +166,46 @@ def show_help():
           '"undone" and number of the item to mark item as not done\n')
 
 
+def list_todos(todo_list, context, list_action):
+    pages_count = ceil(len(todo_list) / PAGE_LEN)
+
+    # todo: make this whoel if/elif/else more compact
+    if list_action == ListAction.START:
+        page = 1
+    else:
+        page = context.page
+        if page:
+            if list_action == ListAction.NEXT:
+                if page == pages_count:
+                    print('There are no more pages.')
+                    return
+                page += 1
+            elif list_action == ListAction.PREV:
+                if page == 1:
+                    print("You're on the first page already.")
+                    return
+                page -= 1
+        else:
+            print('There is no previous page use "ls" to list from beginning.')
+            return
+
+    display_todos(todo_list, page, PAGE_LEN, pages_count)
+    context.page = page
+
+
 def process_user_input(user_input, todos, context):
     action, item_index = parse_action_and_item_index(user_input, todos)
 
     if not action:
         print('Not a valid action')
 
-    # todo: we edit context, we should rathere make copy and return new context
+    # todo: we edit context, we should rather make copy and return new context
     if action == ACTION_LIST:
-        list_todos(todos, page=1)
-        context['page'] = 1
+        list_todos(todos, context, ListAction.START)
     elif action == ACTION_NEXT:
-        # todo: next 7 lines are same as for PREV except +/-
-        page = context.get('page')
-        if page:
-            page = page + 1
-            list_todos(todos, page=page)
-            context['page'] = page
-        else:
-            print('There is no previous page use "ls" to list from beginning.')
+        list_todos(todos, context, ListAction.NEXT)
     elif action == ACTION_PREV:
-        page = context.get('page')
-        if page:
-            page = page - 1
-            list_todos(todos, page=page)
-            context['page'] = page
-        else:
-            print('There is no previous page use "ls" to list from beginning.')
+        list_todos(todos, context, ListAction.PREV)
     elif action == ACTION_NEW:
         new_todo(todos)
     elif action == ACTION_EXIT:
@@ -238,11 +258,10 @@ def run():
     print('Welcome to our ToDo app.')
     show_help()
     todos = load_todos()
-    # todo: context should not be dict, we'll make it a frozen datalass
-    context = dict()
+    context = Context()
     while 1:
         user_input = input()
-        # todo: again, context is passed around and it isupdated
+        # todo: again, context is passed around and it is updated
         # we should give function context and it should return
         # updated context
         process_user_input(user_input, todos, context)
@@ -250,4 +269,10 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    # run()
+    import sys
+    sys.stdout.write('\rsome todo to edit')
+    # x = sys.stdout.readline.insert_text("hello")
+    readline.insert_text("hello")
+    import time
+    time.sleep(100)
