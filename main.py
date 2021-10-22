@@ -1,9 +1,9 @@
 import os
-import readline
 import sys
 from dataclasses import dataclass
 from enum import Enum, unique, auto
 from math import ceil
+from functools import partial
 
 PAGE_LEN = 5
 
@@ -11,22 +11,26 @@ FILE_NAME = 'todos.txt'
 
 PREFIX_DONE = '::done::'
 PREFIX_RM = '::rm::'
+PREFIX_STARTED = '::started::'
 
-# todo: This should really be an enum
-ACTION_UNDONE = 'undone'
-ACTION_DONE = 'done'
-ACTION_NEW = 'new'
-ACTION_LIST = 'ls'
-ACTION_EXIT = 'exit'
-ACTION_HELP = 'help'
-ACTION_RM = 'rm'
-ACTION_NEXT = 'next'
-ACTION_PREV = 'prev'
 
-ALL_ACTIONS = [ACTION_LIST, ACTION_NEW, ACTION_EXIT, ACTION_DONE, ACTION_UNDONE,
-               ACTION_HELP, ACTION_RM, ACTION_NEXT, ACTION_PREV]
+@unique
+class Action(Enum):
+    UNDONE = 'undone'
+    DONE = 'done'
+    NEW = 'new'
+    LIST = 'ls'
+    EXIT = 'exit'
+    HELP = 'help'
+    RM = 'rm'
+    NEXT = 'next'
+    PREV = 'prev'
+    START = 'start'
+    STOP = 'stop'
 
-ITEM_ACTIONS = [ACTION_DONE, ACTION_UNDONE, ACTION_RM]
+    @staticmethod
+    def item_actions():
+        return [Action.DONE, Action.UNDONE, Action.RM, Action.START, Action.STOP]
 
 
 @unique
@@ -53,7 +57,7 @@ def load_todos():
 def save_todos(todo_list):
     with open(FILE_NAME, 'w+') as todo_file:
         for todo in todo_list:
-            if not is_rm(todo):
+            if not is_status(PREFIX_RM, todo):
                 todo_file.write(todo)
 
 
@@ -62,9 +66,9 @@ def parse_item_action_from_user_input(user_input):
     # done3 -> '3'
     # doneblah -> 'blah'
     # we get slice starting from 5th letter which have index 6
-    for item_action in ITEM_ACTIONS:
-        if user_input.startswith(item_action):
-            item_number_str = user_input[len(item_action):].strip()
+    for item_action in Action.item_actions():
+        if user_input.startswith(item_action.value):
+            item_number_str = user_input[len(item_action.value):].strip()
             if item_number_str.isnumeric():
                 item_number = int(item_number_str)
                 return item_action, item_number - 1
@@ -85,15 +89,10 @@ def parse_action_and_item_index(user_input, todo_list):
                 return item_action, None
         else:
             return item_action, None
-
-    if user_input.strip() in ALL_ACTIONS:
-        return user_input.strip(), None
+    if user_input.strip() in [action.value for action in Action]:
+        return Action(user_input.strip()), None
 
     return None, None
-
-
-def is_done(item):
-    return item.startswith(PREFIX_DONE)
 
 
 def display_todos(todo_list, page, page_len, pages_count):
@@ -110,10 +109,12 @@ def display_todos(todo_list, page, page_len, pages_count):
             break
         count += 1
         title = item
-        if is_rm(item):
+        if is_status(PREFIX_RM, item):
             continue
-        elif is_done(item):
+        elif is_status(PREFIX_DONE, item):
             title = title.replace(PREFIX_DONE, "\u2713 ", 1)
+        elif is_status(PREFIX_STARTED, item):
+            title = title.replace(PREFIX_STARTED, "-> ", 1)
 
         print(f"({count}) {title}", end='')
         printed_count += 1
@@ -130,29 +131,20 @@ def display_todos(todo_list, page, page_len, pages_count):
         print('No todos. Let\'s add some. Type "new".')
 
 
-# todo: marking item as X is same code again
-def mark_done(item):
-    if not is_done(item):
-        return f"{PREFIX_DONE}{item}"
+def is_status(status, item):
+    return item.startswith(status)
+
+
+def set_status(status, item):
+    if not is_status(status, item):
+        return f"{status}{item}"
 
     return None
 
 
-# todo: unmarking
-def mark_undone(item):
-    if is_done(item):
-        return item[len(PREFIX_DONE):]
-
-    return None
-
-
-def is_rm(item):
-    return item.startswith(PREFIX_RM)
-
-
-def mark_rm(item):
-    if not is_rm(item):
-        return f"{PREFIX_RM}{item}"
+def unset_status(status, item):
+    if is_status(status, item):
+        return item[len(status):]
 
     return None
 
@@ -200,24 +192,28 @@ def process_user_input(user_input, todos, context):
         print('Not a valid action')
 
     # todo: we edit context, we should rather make copy and return new context
-    if action == ACTION_LIST:
+    if action == Action.LIST:
         list_todos(todos, context, ListAction.START)
-    elif action == ACTION_NEXT:
+    elif action == Action.NEXT:
         list_todos(todos, context, ListAction.NEXT)
-    elif action == ACTION_PREV:
+    elif action == Action.PREV:
         list_todos(todos, context, ListAction.PREV)
-    elif action == ACTION_NEW:
+    elif action == Action.NEW:
         new_todo(todos)
-    elif action == ACTION_EXIT:
+    elif action == Action.EXIT:
         sys.exit()
-    elif action == ACTION_HELP:
+    elif action == Action.HELP:
         show_help()
-    elif action == ACTION_DONE:
+    elif action == Action.DONE:
         process_done(item_index, todos)
-    elif action == ACTION_UNDONE:
+    elif action == Action.UNDONE:
         process_undone(item_index, todos)
-    elif action == ACTION_RM:
+    elif action == Action.RM:
         process_rm(item_index, todos)
+    elif action == Action.START:
+        process_start(item_index, todos)
+    elif action == Action.STOP:
+        process_stop(item_index, todos)
 
 
 def process_action(item_index, todos, action_fn, success_str='', no_action_str=''):
@@ -235,16 +231,24 @@ def process_action(item_index, todos, action_fn, success_str='', no_action_str='
         print(no_action_str)
 
 
+def process_start(item_index, todos):
+    process_action(item_index, todos, partial(set_status, PREFIX_STARTED), 'Started.', 'Already started.')
+
+
+def process_stop(item_index, todos):
+    process_action(item_index, todos, partial(unset_status, PREFIX_STARTED), 'Stopped.', 'Already started.')
+
+
 def process_rm(item_index, todos):
-    process_action(item_index, todos, mark_undone, 'Removed.', 'Already removed.')
+    process_action(item_index, todos, partial(set_status, PREFIX_RM), 'Removed.', 'Already removed.')
 
 
 def process_undone(item_index, todos):
-    process_action(item_index, todos, mark_undone, 'Undone.', "Not done, can't undone")
+    process_action(item_index, todos, partial(unset_status, PREFIX_DONE), 'Undone.', "Not done, can't undone")
 
 
 def process_done(item_index, todos):
-    process_action(item_index, todos, mark_done, 'Marked as done.', 'Already marked as done')
+    process_action(item_index, todos, partial(set_status, PREFIX_DONE), 'Marked as done.', 'Already marked as done')
 
 
 def new_todo(todos):
@@ -269,10 +273,4 @@ def run():
 
 
 if __name__ == '__main__':
-    # run()
-    import sys
-    sys.stdout.write('\rsome todo to edit')
-    # x = sys.stdout.readline.insert_text("hello")
-    readline.insert_text("hello")
-    import time
-    time.sleep(100)
+    run()

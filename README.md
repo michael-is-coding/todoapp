@@ -11,7 +11,12 @@
 - mark todo item as done
 - mark todo item as not done
 - mark todo item as in progress
+- list only items with specific status
 - edit/replace a todo item
+
+## BUG
+
+- deal with applying 2 statuses, we should only be able to apply one
 
 ## How it is gonna work?
 
