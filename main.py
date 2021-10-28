@@ -1,4 +1,5 @@
 import os
+import readline
 import sys
 from dataclasses import dataclass
 from enum import Enum, unique, auto
@@ -95,6 +96,17 @@ def parse_action_and_item_index(user_input, todo_list):
     return None, None
 
 
+def display_text(item, count=None):
+    if is_status(PREFIX_DONE, item):
+        title = item.replace(PREFIX_DONE, "\u2713 ", 1)
+    elif is_status(PREFIX_STARTED, item):
+        title = item.replace(PREFIX_STARTED, "-> ", 1)
+    else:
+        title = item
+
+    return f"({count}) {title}" if count else title
+
+
 def display_todos(todo_list, page, page_len, pages_count):
     start_index = (page - 1) * page_len
     end_index = page * page_len
@@ -108,15 +120,11 @@ def display_todos(todo_list, page, page_len, pages_count):
         if printed_count >= 5:
             break
         count += 1
-        title = item
         if is_status(PREFIX_RM, item):
             continue
-        elif is_status(PREFIX_DONE, item):
-            title = title.replace(PREFIX_DONE, "\u2713 ", 1)
-        elif is_status(PREFIX_STARTED, item):
-            title = title.replace(PREFIX_STARTED, "-> ", 1)
+        title = display_text(item, count)
 
-        print(f"({count}) {title}", end='')
+        print(title, end='')
         printed_count += 1
 
     if printed_count:
@@ -136,10 +144,16 @@ def is_status(status, item):
 
 
 def set_status(status, item):
-    if not is_status(status, item):
-        return f"{status}{item}"
+    statuses = [PREFIX_DONE, PREFIX_STARTED]
 
-    return None
+    for s in statuses:
+        if is_status(s, item):
+            if s == status:
+                return None
+            new_item = unset_status(s, item)
+            return f"{status}{new_item}"
+
+    return f"{status}{item}"
 
 
 def unset_status(status, item):
@@ -155,7 +169,9 @@ def show_help():
           '"new" to create a new todo item\n'
           '"exit" to exit a program.\n'
           '"done" and number of the item to mark item as done\n'
-          '"undone" and number of the item to mark item as not done\n')
+          '"undone" and number of the item to mark item as not done\n'
+          '"start" and number of the item to mark item as in progress\n'
+          '"stop" and number of the item to mark item as not started\n')
 
 
 def list_todos(todo_list, context, list_action):
@@ -226,29 +242,29 @@ def process_action(item_index, todos, action_fn, success_str='', no_action_str='
     if updated_item is not None:
         todos[item_index] = updated_item
         save_todos(todos)
-        print(success_str)
+        print(success_str + ': ' + display_text(updated_item))
     else:
         print(no_action_str)
 
 
 def process_start(item_index, todos):
-    process_action(item_index, todos, partial(set_status, PREFIX_STARTED), 'Started.', 'Already started.')
+    process_action(item_index, todos, partial(set_status, PREFIX_STARTED), 'Started', 'Already started.')
 
 
 def process_stop(item_index, todos):
-    process_action(item_index, todos, partial(unset_status, PREFIX_STARTED), 'Stopped.', 'Already started.')
+    process_action(item_index, todos, partial(unset_status, PREFIX_STARTED), 'Stopped', "Not started, can't stop.")
 
 
 def process_rm(item_index, todos):
-    process_action(item_index, todos, partial(set_status, PREFIX_RM), 'Removed.', 'Already removed.')
+    process_action(item_index, todos, partial(set_status, PREFIX_RM), 'Removed', 'Already removed.')
 
 
 def process_undone(item_index, todos):
-    process_action(item_index, todos, partial(unset_status, PREFIX_DONE), 'Undone.', "Not done, can't undone")
+    process_action(item_index, todos, partial(unset_status, PREFIX_DONE), 'Undone', "Not done, can't undone")
 
 
 def process_done(item_index, todos):
-    process_action(item_index, todos, partial(set_status, PREFIX_DONE), 'Marked as done.', 'Already marked as done')
+    process_action(item_index, todos, partial(set_status, PREFIX_DONE), 'Marked as done', 'Already marked as done')
 
 
 def new_todo(todos):

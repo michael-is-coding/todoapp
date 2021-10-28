@@ -14,9 +14,9 @@
 - list only items with specific status
 - edit/replace a todo item
 
-## BUG
+## KNOWN BUGS
 
-- deal with applying 2 statuses, we should only be able to apply one
+- no known bugs
 
 ## How it is gonna work?
 
